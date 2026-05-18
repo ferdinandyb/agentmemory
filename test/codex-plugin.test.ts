@@ -91,6 +91,19 @@ describe("Codex plugin manifest (developers.openai.com/codex/plugins)", () => {
       expect(existsSync(join(pluginRoot, rel)), `missing hook script: ${rel}`).toBe(true);
     }
   });
+
+  it("Stop hook summarizes and ends the session", () => {
+    type HookHandler = { type: string; command: string };
+    type HookEntry = { hooks: HookHandler[] };
+    const hooks = readJson<{ hooks: Record<string, HookEntry[]> }>(
+      join(pluginRoot, "hooks/hooks.codex.json"),
+    );
+    const stopCommands = hooks.hooks.Stop.flatMap((entry) =>
+      entry.hooks.map((handler) => handler.command),
+    );
+    expect(stopCommands).toContain("node ${CLAUDE_PLUGIN_ROOT}/scripts/stop.mjs");
+    expect(stopCommands).toContain("node ${CLAUDE_PLUGIN_ROOT}/scripts/session-end.mjs");
+  });
 });
 
 describe("Codex marketplace.json (.codex-plugin/marketplace.json at repo root)", () => {
