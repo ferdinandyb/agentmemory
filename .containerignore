@@ -1,0 +1,7 @@
+# Send only what the Containerfile needs.
+# Everything else (node_modules, .git, data/, test fixtures, website, etc.)
+# is excluded to keep the build context small.
+*
+!package.json
+!dist/
+!podman-entrypoint.sh

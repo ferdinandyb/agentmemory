@@ -1,0 +1,26 @@
+services:
+  agentmemory:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: agentmemory-local
+    container_name: agentmemory
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    mem_limit: 4g
+    memswap_limit: 6g
+    ports:
+      - "127.0.0.1:3111:3111"
+      - "127.0.0.1:3114:3114"
+    volumes:
+      - agentmemory-data:/data:rw
+      - agentmemory-models:/models:rw,U
+    environment:
+      - ANTHROPIC_API_KEY
+    restart: unless-stopped
+
+volumes:
+  agentmemory-data:
+  agentmemory-models:
