@@ -9,18 +9,27 @@ services:
       - ALL
     security_opt:
       - no-new-privileges
-    mem_limit: 4g
-    memswap_limit: 6g
+    mem_limit: 8g
+    memswap_limit: 10g
     ports:
+      # host:container. REST and stream bind 0.0.0.0 in-container (direct map).
+      # The viewer binds 127.0.0.1:3113 (loopback), so socat bridges it on
+      # container 3114; published as host 3113 to preserve the viewer's
+      # port-offset math (browser derives ws=port-1=3112, rest=port-2=3111).
       - "127.0.0.1:3111:3111"
-      - "127.0.0.1:3114:3114"
+      - "127.0.0.1:3112:3112"
+      - "127.0.0.1:3113:3114"
     volumes:
       - agentmemory-data:/data:rw
       - agentmemory-models:/models:rw,U
     environment:
       - ANTHROPIC_API_KEY
+      - AGENTMEMORY_SECRET
+      - ANTHROPIC_MODEL=claude-sonnet-4-6
     restart: unless-stopped
 
 volumes:
   agentmemory-data:
+    external: true
   agentmemory-models:
+    external: true

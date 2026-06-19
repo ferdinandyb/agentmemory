@@ -9,8 +9,9 @@
 #      If AGENTMEMORY_SECRET is already set in the environment, persist that
 #      value instead (allows explicit secret injection via -e).
 #   2. Set viewer env vars so the DNS-rebinding check accepts the socat port.
-#   3. Start a socat proxy (0.0.0.0:3114 -> 127.0.0.1:3113) so the viewer
-#      is reachable from outside the container despite its hardcoded loopback bind.
+#   3. Start a socat proxy (0.0.0.0:3114 -> 127.0.0.1:3113) so the loopback-only
+#      viewer is reachable; compose publishes it as host 3113. REST (3111) and
+#      stream (3112) bind 0.0.0.0 in-container and are published directly.
 #   4. exec agentmemory.
 
 set -eu
@@ -44,18 +45,19 @@ fi
 AGENTMEMORY_SECRET="$(cat "$HMAC_FILE")"
 export AGENTMEMORY_SECRET
 
-# Allow the viewer's Host-header check to accept requests arriving via the
-# socat proxy on port 3114 (the externally published port).
-export VIEWER_ALLOWED_HOSTS="localhost:3114,127.0.0.1:3114"
-export VIEWER_ALLOWED_ORIGINS="http://localhost:3111,http://localhost:3113,http://localhost:3114,http://127.0.0.1:3111,http://127.0.0.1:3113,http://127.0.0.1:3114"
+# The viewer is reached from the host on port 3113 (compose maps host 3113 ->
+# container 3114, the socat bridge below). The browser loads the page from
+# :3113 and derives the REST port (3111) and stream port (3112) from it, so the
+# Host header and Origin it presents are for :3113.
+export VIEWER_ALLOWED_HOSTS="localhost:3113,127.0.0.1:3113"
+export VIEWER_ALLOWED_ORIGINS="http://localhost:3111,http://localhost:3112,http://localhost:3113,http://127.0.0.1:3111,http://127.0.0.1:3112,http://127.0.0.1:3113"
 
-# Proxy the viewer's loopback-only port to all interfaces so it is reachable
-# via the published -p 127.0.0.1:3114:3114 mapping.
-# agentmemory starts the viewer on 127.0.0.1:3113 with no env var override,
-# so socat is the least-invasive way to expose it without source changes.
-# socat starts before the viewer is ready; the `fork` option means each
-# connection attempt is handled independently — early browser requests get
-# "connection refused" and the user just retries once the viewer is up.
+# The viewer binds 127.0.0.1:3113 (loopback only), so Podman's published-port
+# forwarding can't reach it. socat bridges 0.0.0.0:3114 -> 127.0.0.1:3113;
+# compose publishes that as host 3113. The REST (3111) and stream (3112)
+# workers already bind 0.0.0.0 in-container, so they need no proxy.
+# socat starts before the viewer is ready; `fork` handles each connection
+# independently — early requests get "connection refused" until the viewer is up.
 socat TCP-LISTEN:3114,fork,bind=0.0.0.0,reuseaddr TCP:127.0.0.1:3113 &
 
 exec agentmemory "$@"

@@ -39,6 +39,17 @@ RUN mkdir -p /models \
 # Run `npm run build` before `podman build`.
 COPY dist/ ./dist/
 
+# Raise the iii-sdk client invocation timeout (src/index.ts registerWorker
+# invocationTimeoutMs, minified to `18e4` = 180000ms) to 18e5 = 1800000ms (30 min).
+# The 180s default makes the post-rebuild BM25/vector index save (~110 queued
+# `state::set` writes) time out, so the index never persists and every boot
+# re-embeds the whole corpus on CPU. Deliberately generous for now to isolate the
+# timeout as the cap; dial back later. Patched here (glob over the content-hashed
+# bundle) so it survives `npm run build` without editing tracked source.
+RUN sed -i 's/invocationTimeoutMs: *18e4/invocationTimeoutMs: 18e5/' dist/*.mjs \
+ && grep -q 'invocationTimeoutMs: 18e5' dist/src-*.mjs \
+ && ! grep -rq 'invocationTimeoutMs: *18e4' dist/*.mjs
+
 # Bake the container-tuned iii config directly into dist/ so the CLI finds it
 # at first-path priority (same dir as dist/cli.mjs) without needing a runtime
 # write. Binds on 0.0.0.0 inside the container; absolute /data/ paths for state.
@@ -52,11 +63,11 @@ workers:
       cors:
         allowed_origins:
           - "http://localhost:3111"
+          - "http://localhost:3112"
           - "http://localhost:3113"
-          - "http://localhost:3114"
           - "http://127.0.0.1:3111"
+          - "http://127.0.0.1:3112"
           - "http://127.0.0.1:3113"
-          - "http://127.0.0.1:3114"
         allowed_methods: [GET, POST, PUT, DELETE, OPTIONS]
   - name: iii-state
     config:
@@ -115,7 +126,11 @@ ENV AGENTMEMORY_III_VERSION=${III_VERSION} \
     AGENTMEMORY_AUTO_COMPRESS=true \
     GRAPH_EXTRACTION_ENABLED=true
 
-EXPOSE 3111 3114
+# Published container ports: 3111 REST, 3112 stream (WebSocket), 3114 socat
+# bridge for the loopback-only viewer. Host mapping in compose.local.yml maps
+# host 3113 -> container 3114 so the viewer's port math (ws=port-1, rest=port-2)
+# resolves correctly in the browser.
+EXPOSE 3111 3112 3114
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:3111/agentmemory/livez || exit 1
