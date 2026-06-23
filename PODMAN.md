@@ -4,6 +4,13 @@ Fully isolated local deployment. The container has no access to your host
 filesystem. All state lives in named volumes. Only the REST API (3111), the
 WebSocket stream (3112), and the viewer (3113) are published, bound to loopback.
 
+
+```
+ANTHROPIC_API_KEY=$(pass show agentmemorykey) \
+  AGENTMEMORY_SECRET=$(pass show agentmemorysecret) \
+  podman compose -f compose.local.yml up -d
+```
+
 ## Architecture
 
 ```
